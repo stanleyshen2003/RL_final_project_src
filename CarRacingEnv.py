@@ -18,7 +18,7 @@ class CarRacingEnvironment:
 		self.env = RaceEnv(
 			scenario='circle_cw_competition_collisionStop',
 			render_mode='rgb_array_birds_eye',
-			reset_when_collision=True,
+			#reset_when_collision=True,
 		)
 		self.action_space = self.env.action_space
 		self.observation_space = self.env.observation_space
