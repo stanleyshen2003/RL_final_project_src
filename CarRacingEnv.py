@@ -60,6 +60,7 @@ class CarRacingEnvironment:
 		# 	reward = -100
 
 		# convert to grayscale
+		obs = np.transpose(obs, (1, 2, 0))
 		obs = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY) # 96x96
 
 		# save image for debugging
