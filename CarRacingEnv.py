@@ -79,15 +79,17 @@ class CarRacingEnvironment:
 		return obs, reward, terminates, truncates, info
 	
 	def reset(self):
-		obs, info = self.env.reset(seed=3219)	# 3219, 6728, 8844, 7022, 2713
+		obs, info = self.env.reset()	# 3219, 6728, 8844, 7022, 2713
 		self.ep_len = 0
+		# now the obs is 3,128,128, i want to convert it to 128,128,3
+		obs = np.transpose(obs, (1, 2, 0))
 		obs = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY) # 96x96
 
 		# frame stacking
 		for _ in range(self.frames.maxlen):
 			self.frames.append(obs)
 		obs = np.stack(self.frames, axis=0)
-
+		
 		return obs, info
 	
 	def render(self):
