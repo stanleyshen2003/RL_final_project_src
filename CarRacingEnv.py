@@ -16,7 +16,7 @@ class CarRacingEnvironment:
 	def __init__(self, N_frame=4, test=False):
 		self.test = False # set to false
 		self.env = RaceEnv(
-			scenario='/circle_cw_competition_collosionStop',
+			scenario='circle_cw_competition_collisionStop',
 			render_mode='rgb_array_birds_eye',
 			reset_when_collision=True,
 		)
