@@ -116,7 +116,7 @@ class TD3BaseAgent(ABC):
 					action_real = np.array([action[0] - action[2], action[1]])
 				else:
 					# exploration degree
-					sigma = max(0.1*(1-episode/self.total_episode), 0.005)
+					sigma = max(0.1*(1-episode/self.total_episode), 0.01)
 					action = self.decide_agent_actions(state, sigma=sigma)
 					action_real = np.array([action[0] - action[2], action[1]])
 				if(episode % 5 == 0):
@@ -184,6 +184,15 @@ class TD3BaseAgent(ABC):
 		self.actor_net.load_state_dict(checkpoint['actor'])
 		self.critic_net1.load_state_dict(checkpoint['critic1'])
 		self.critic_net2.load_state_dict(checkpoint['critic2'])
+		self.target_actor_net.load_state_dict(self.actor_net.state_dict())
+		self.target_critic_net1.load_state_dict(self.critic_net1.state_dict())
+		self.target_critic_net2.load_state_dict(self.critic_net2.state_dict())
+		self.target_actor_net.to(self.device)
+		self.target_critic_net1.to(self.device)
+		self.target_critic_net2.to(self.device)
+		self.actor_net.to(self.device)
+		self.critic_net1.to(self.device)
+		self.critic_net2.to(self.device)
 
 	# load model weights and evaluate
 	def load_and_evaluate(self, load_path):
@@ -193,7 +202,7 @@ class TD3BaseAgent(ABC):
 	def act(self, obs):
 		obs = np.transpose(obs, (1, 2, 0))
 		obs = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY)
-		obs = cv2.resize(obs, (64, 64), interpolation=cv2.INTER_AREA)
+		#obs = cv2.resize(obs, (64, 64), interpolation=cv2.INTER_AREA)
 		#print(obs.shape)
 		self.eval_frames.append(obs)
 		while(len(self.eval_frames) < 4):

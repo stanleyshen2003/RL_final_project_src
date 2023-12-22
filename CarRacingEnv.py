@@ -34,11 +34,11 @@ class CarRacingEnvironment:
 		#print(info)
 		self.ep_len += 1
 		if info["wrong_way"]:
-			reward = - 0.001
+			reward = -0.001
 		if info["wall_collision"]:
-			reward = - 0.03
+			reward = -0.02
 		if len(info["opponent_collisions"]) != 0:
-			reward = - 0.01
+			reward = -0.01
 
 		if self.test:
 			reward = original_reward
