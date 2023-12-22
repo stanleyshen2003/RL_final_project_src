@@ -14,78 +14,64 @@ import torch.nn as nn
 
 class CarRacingEnvironment:
 	def __init__(self, N_frame=4, test=False):
-		self.test = False # set to false
+		self.test = test # set to false
 		self.env = RaceEnv(
-			scenario='circle_cw_competition_collisionStop',
+			scenario='austria_competition',
 			render_mode='rgb_array_birds_eye',
-			#reset_when_collision=True,
+			reset_when_collision=True,
 		)
 		self.action_space = self.env.action_space
 		self.observation_space = self.env.observation_space
 		self.ep_len = 0
 		self.frames = deque(maxlen=N_frame)
 	
-	def check_car_position(self, obs):
-		# cut the image to get the part where the car is
-		part_image = obs[60:84, 40:60, :]
-
-		road_color_lower = np.array([90, 90, 90], dtype=np.uint8)
-		road_color_upper = np.array([120, 120, 120], dtype=np.uint8)
-		grass_color_lower = np.array([90, 180, 90], dtype=np.uint8)
-		grass_color_upper = np.array([120, 255, 120], dtype=np.uint8)
-		road_mask = cv2.inRange(part_image, road_color_lower, road_color_upper)
-		grass_mask = cv2.inRange(part_image, grass_color_lower, grass_color_upper)
-		# count the number of pixels in the road and grass
-		road_pixel_count = cv2.countNonZero(road_mask)
-		grass_pixel_count = cv2.countNonZero(grass_mask)
-
-		# save image for debugging
-		# filename = "images/image" + str(self.ep_len) + ".jpg"
-		# cv2.imwrite(filename, part_image)
-
-		return road_pixel_count, grass_pixel_count
 
 	def step(self, action):
+		#print(action)
 		obs, reward, terminates, truncates, info = self.env.step(action)
-		# original_reward = reward
-		# original_terminates = terminates
+		
+		original_reward = reward
+		#print(info)
 		self.ep_len += 1
-		# road_pixel_count, grass_pixel_count = self.check_car_position(obs)
-		# info["road_pixel_count"] = road_pixel_count
-		# info["grass_pixel_count"] = grass_pixel_count
+		if info["wrong_way"]:
+			reward = - 0.001
+		if info["wall_collision"]:
+			reward = - 0.03
+		if len(info["opponent_collisions"]) != 0:
+			reward = - 0.01
 
-		# # my reward shaping strategy, you can try your own
-		# if road_pixel_count < 10:
-		# 	terminates = True
-		# 	reward = -100
+		if self.test:
+			reward = original_reward
 
-		# convert to grayscale
 		obs = np.transpose(obs, (1, 2, 0))
-		obs = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY) # 96x96
-
-		# save image for debugging
-		# filename = "images/image" + str(self.ep_len) + ".jpg"
-		# cv2.imwrite(filename, obs)
-
-		# frame stacking
+		obs = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY)
+		#obs = cv2.resize(obs, (64, 64), interpolation=cv2.INTER_AREA)
+		#filename = "images/image" + str(self.ep_len) + ".jpg"
+		#cv2.imwrite(filename, obs)
+		#print("saved to", filename)
+		#frame stacking
 		self.frames.append(obs)
+		#print(self.frames)
 		obs = np.stack(self.frames, axis=0)
 
-		# if self.test:
-		# 	# enable this line to recover the original reward
-		# 	reward = original_reward
-		# 	# enable this line to recover the original terminates signal, disable this to accerlate evaluation
-		# 	terminates = original_terminates
 
 		return obs, reward, terminates, truncates, info
 	
 	def reset(self):
-		obs, info = self.env.reset()	# 3219, 6728, 8844, 7022, 2713
+		kwargs = {}
+		if kwargs.get('options'):
+			kwargs['options']['mode'] = 'random'
+		else:
+			kwargs['options'] = {'mode': 'random'}
+		obs, info = self.env.reset(**kwargs)	# 3219, 6728, 8844, 7022, 2713
 		self.ep_len = 0
 		# now the obs is 3,128,128, i want to convert it to 128,128,3
 		obs = np.transpose(obs, (1, 2, 0))
 		obs = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY) # 96x96
-
+		#obs = cv2.resize(obs, (64, 64), interpolation=cv2.INTER_AREA)
+		#filename = "images/image" + str(self.ep_len) + ".jpg"
+		#cv2.imwrite(filename, obs)
+		#print("saved to", filename)
 		# frame stacking
 		for _ in range(self.frames.maxlen):
 			self.frames.append(obs)
@@ -102,6 +88,7 @@ class CarRacingEnvironment:
 if __name__ == '__main__':
 	env = CarRacingEnvironment(test=True)
 	obs, info = env.reset()
+	print(info['pose'])
 	done = False
 	total_reward = 0
 	total_length = 0
@@ -109,9 +96,9 @@ if __name__ == '__main__':
 	while not done:
 		t += 1
 		action = env.action_space.sample()
-		action[2] = 0.0
+		print(t)
+		action[0] = 1
 		obs, reward, terminates, truncates, info = env.step(action)
-		print(f'{t}: road_pixel_count: {info["road_pixel_count"]}, grass_pixel_count: {info["grass_pixel_count"]}, reward: {reward}')
 		total_reward += reward
 		total_length += 1
 		env.render()

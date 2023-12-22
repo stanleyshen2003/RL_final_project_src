@@ -36,14 +36,16 @@ class ActorNetSimple(nn.Module):
         # state = state.float() / 255.0
         h = self.conv(state)
         h = torch.flatten(h, start_dim=1)
+        #print(h.shape)
         h = self.linear(h)
-
+        #print("---------------")
+        #print(h)
         h_clone = h.clone()
-        # map to valid action space: {steer:[-1, 1], gas:[0, 1], brake:[0, 1]}
-        h_clone[:, 0] = (h_clone[:, 0])
-        h_clone[:, 1] = (h_clone[:, 1]+1) * 0.5 + 0.1
-        h_clone[:, 2] = (h_clone[:, 2]+1) * brake_rate
-        
+        # map to valid action space: {gas:[0, 1], steer:[-1, 1], brake:[0, 1]}
+        h_clone[:, 0] = (h_clone[:, 0]+1) * 0.5 * 0.1
+        h_clone[:, 1] = (h_clone[:, 1]) * 0.5
+        h_clone[:, 2] = (h_clone[:, 2]+1) * 0.0015
+        #print(h_clone)
         return h_clone
     
 class CriticNetSimple(nn.Module):

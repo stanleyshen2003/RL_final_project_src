@@ -7,24 +7,26 @@ from CarRacingEnv import CarRacingEnvironment
 import random
 from base_agent import OUNoiseGenerator, GaussianNoise
 
+
+
 class CarRacingTD3Agent(TD3BaseAgent):
 	def __init__(self, config):
 		super(CarRacingTD3Agent, self).__init__(config)
 		# initialize environment
 		self.env = CarRacingEnvironment(N_frame=4, test=False)
 		self.test_env = CarRacingEnvironment(N_frame=4, test=True)
-		
+		self.framesize = 128
 		# behavior network
-		self.actor_net = ActorNetSimple(self.env.observation_space.shape[0], self.env.action_space.shape[0], 4)
-		self.critic_net1 = CriticNetSimple(self.env.observation_space.shape[0], self.env.action_space.shape[0], 4)
-		self.critic_net2 = CriticNetSimple(self.env.observation_space.shape[0], self.env.action_space.shape[0], 4)
+		self.actor_net = ActorNetSimple(self.framesize, 3, 4)
+		self.critic_net1 = CriticNetSimple(self.framesize, 3, 4)
+		self.critic_net2 = CriticNetSimple(self.framesize, 3, 4)
 		self.actor_net.to(self.device)
 		self.critic_net1.to(self.device)
 		self.critic_net2.to(self.device)
 		# target network
-		self.target_actor_net = ActorNetSimple(self.env.observation_space.shape[0], self.env.action_space.shape[0], 4)
-		self.target_critic_net1 = CriticNetSimple(self.env.observation_space.shape[0], self.env.action_space.shape[0], 4)
-		self.target_critic_net2 = CriticNetSimple(self.env.observation_space.shape[0], self.env.action_space.shape[0], 4)
+		self.target_actor_net = ActorNetSimple(self.framesize, 3, 4)
+		self.target_critic_net1 = CriticNetSimple(self.framesize, 3, 4)
+		self.target_critic_net2 = CriticNetSimple(self.framesize, 3, 4)
 		self.target_actor_net.to(self.device)
 		self.target_critic_net1.to(self.device)
 		self.target_critic_net2.to(self.device)
@@ -45,12 +47,11 @@ class CarRacingTD3Agent(TD3BaseAgent):
 		# noise_std = np.full(self.env.action_space.shape[0], 1.0, np.float32)
 		# self.noise = OUNoiseGenerator(noise_mean, noise_std)
 
-		self.noise = GaussianNoise(self.env.action_space.shape[0], 0.0, 1.0)
-
+		self.noise = GaussianNoise(3, 0.0, 1.0)
 		# for clipping
-		self.noise_threshold = 0.1
-		self.min_action = torch.tensor([-1, 0, 0])
-		self.max_action = torch.tensor([1, 1, 1])
+		self.noise_threshold = 1
+		self.min_action = torch.tensor([0, -0.5,0])
+		self.max_action = torch.tensor([0.1, 0.5, 0.1])
 		
 	
 	def decide_agent_actions(self, state, sigma=0.0, brake_rate=0.015):
@@ -58,7 +59,15 @@ class CarRacingTD3Agent(TD3BaseAgent):
 		# based on the behavior (actor) network and exploration noise
 		with torch.no_grad():
 			state = torch.from_numpy(state).unsqueeze(0).to(torch.float32)
-			action = self.actor_net(state).numpy().flatten() + sigma * self.noise.generate()
+			#print(state.shape)
+			#print(self.noise1.generate())
+			noise = self.noise.generate()
+			
+			action = self.actor_net(state.cuda()).cpu().numpy().flatten() + sigma * np.clip(noise, -self.noise_threshold, self.noise_threshold)
+			#print(action)
+			action = np.clip(action, self.min_action, self.max_action)
+            
+		#print(action)
 		return action
 
 		
@@ -85,13 +94,13 @@ class CarRacingTD3Agent(TD3BaseAgent):
 
 			# get the noise
 			noise = self.noise.generate()
-			
+			#print(noise)
 			# clip the noise using self.noise_threshold
-			noise = torch.from_numpy(np.clip(noise, noise + self.noise_threshold, noise - self.noise_threshold)).to(self.device, dtype=torch.float32)
+			noise = torch.from_numpy(np.clip(noise, self.noise_threshold, - self.noise_threshold)).to(self.device, dtype=torch.float32)
 			a_next = self.target_actor_net(next_state) + noise
 
 			# clip the action so that it won't exceed the range
-			a_next = torch.clamp(a_next, self.min_action, self.max_action)
+			a_next = torch.clamp(a_next, self.min_action.to(self.device), self.max_action.to(self.device))
 
 			# get q next
 			q_next1 = self.target_critic_net1(next_state, a_next)
@@ -120,13 +129,13 @@ class CarRacingTD3Agent(TD3BaseAgent):
 			# actor loss
 			# select action a from behavior actor network (a is different from sample transition's action)
 			action = self.actor_net(state)
-
+			
 			# get Q from behavior critic network, mean Q value -> objective function
 			q_value = self.critic_net1(state, action).mean()
 			
 			# maximize (objective function) = minimize -1 * (objective function)
 			actor_loss = -1 * q_value
-
+			#print(actor_loss.item())
 			# optimize actor
 			self.actor_net.zero_grad()
 			actor_loss.backward()

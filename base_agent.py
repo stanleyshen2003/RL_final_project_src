@@ -4,11 +4,20 @@ import numpy as np
 import os
 import time
 from collections import deque
-#from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from replay_buffer import ReplayMemory
 from abc import ABC, abstractmethod
+from collections import deque
+import argparse
+from collections import deque
+import itertools
+import time
+import cv2
 
-
+from racecar_gym.env import RaceEnv
+import numpy as np
+import torch
+import torch.nn as nn
 class GaussianNoise:
 	def __init__(self, dim, mu=None, std=None):
 		self.mu = mu if mu else np.zeros(dim)
@@ -55,9 +64,9 @@ class TD3BaseAgent(ABC):
 		self.gamma = config["gamma"]
 		self.tau = config["tau"]
 		self.update_freq = config["update_freq"]
-	
+		self.eval_frames = deque(maxlen=4)
 		self.replay_buffer = ReplayMemory(int(config["replay_buffer_capacity"]))
-		#self.writer = SummaryWriter(config["logdir"])
+		self.writer = SummaryWriter(config["logdir"])
 
 	@abstractmethod
 	def decide_agent_actions(self, state, sigma=0.0):
@@ -100,14 +109,21 @@ class TD3BaseAgent(ABC):
 			self.noise.reset()
 			for t in range(10000):
 				if self.total_time_step < self.warmup_steps:
-					action = self.env.action_space.sample()
+					action = np.random.uniform(-1, 1, size=(3,))
+					action[0]*=0.05
+					action[2]*=0.00015
+					action[1]*=0.5
+					action_real = np.array([action[0] - action[2], action[1]])
 				else:
 					# exploration degree
-					sigma = max(0.1*(1-episode/self.total_episode), 0.01)
+					sigma = max(0.1*(1-episode/self.total_episode), 0.005)
 					action = self.decide_agent_actions(state, sigma=sigma)
-				
-				next_state, reward, terminates, truncates, _ = self.env.step(action)
-				self.replay_buffer.append(state, action, [reward/10], next_state, [int(terminates)])
+					action_real = np.array([action[0] - action[2], action[1]])
+				if(episode % 5 == 0):
+					print(action_real)
+				next_state, reward, terminates, truncates, _ = self.env.step(action_real)
+				#print(reward, '\n-----------\n')
+				self.replay_buffer.append(state, action, [reward*500], next_state, [int(terminates)])
 				if self.total_time_step >= self.warmup_steps:
 					self.update()
 
@@ -115,7 +131,7 @@ class TD3BaseAgent(ABC):
 				total_reward += reward
 				state = next_state
 				if terminates or truncates:
-					#self.writer.add_scalar('Train/Episode Reward', total_reward, self.total_time_step)
+					self.writer.add_scalar('Train/Episode Reward', total_reward, self.total_time_step)
 					print(
 						'Step: {}\tEpisode: {}\tLength: {:3d}\tTotal reward: {:.2f}'
 						.format(self.total_time_step, episode+1, t, total_reward))
@@ -125,8 +141,8 @@ class TD3BaseAgent(ABC):
 			if (episode+1) % self.eval_interval == 0:
 				# save model checkpoint
 				avg_score = self.evaluate()
-				#self.save(os.path.join(self.writer.log_dir, f"model_{self.total_time_step}_{int(avg_score)}.pth"))
-				#self.writer.add_scalar('Evaluate/Episode Reward', avg_score, self.total_time_step)
+				self.save(os.path.join(self.writer.log_dir, f"model_{self.total_time_step}_{int(avg_score*100)}.pth"))
+				self.writer.add_scalar('Evaluate/Episode Reward', avg_score, self.total_time_step)
 
 	def evaluate(self):
 		print("==============================================")
@@ -137,7 +153,8 @@ class TD3BaseAgent(ABC):
 			state, infos = self.test_env.reset()
 			for t in range(10000):
 				action = self.decide_agent_actions(state)
-				next_state, reward, terminates, truncates, _ = self.test_env.step(action)
+				action_real = ([action[0] - action[2], action[1]])
+				next_state, reward, terminates, truncates, _ = self.test_env.step(action_real)
 				total_reward += reward
 				state = next_state
 				if terminates or truncates:
@@ -172,4 +189,22 @@ class TD3BaseAgent(ABC):
 	def load_and_evaluate(self, load_path):
 		self.load(load_path)
 		self.evaluate()
+        
+	def act(self, obs):
+		obs = np.transpose(obs, (1, 2, 0))
+		obs = cv2.cvtColor(obs, cv2.COLOR_BGR2GRAY)
+		obs = cv2.resize(obs, (64, 64), interpolation=cv2.INTER_AREA)
+		#print(obs.shape)
+		self.eval_frames.append(obs)
+		while(len(self.eval_frames) < 4):
+			self.eval_frames.append(obs)
+			#print(len(self.eval_frames))
+		obs = np.stack(self.eval_frames, axis=0)
+		#print(obs.shape)
+		action = self.decide_agent_actions(obs)
+		#np.array([action[0] - action[2], action[1]])
+		return np.array([action[0] - action[2], action[1]])
+
+
+    
 
