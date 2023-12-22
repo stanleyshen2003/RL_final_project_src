@@ -138,11 +138,10 @@ class TD3BaseAgent(ABC):
 				
 					break
 			
-			if (episode+1) % self.eval_interval == 0:
+			#if (episode+1) % self.eval_interval == 0:
 				# save model checkpoint
-				avg_score = self.evaluate()
-				self.save(os.path.join(self.writer.log_dir, f"model_{self.total_time_step}_{int(avg_score*100)}.pth"))
-				self.writer.add_scalar('Evaluate/Episode Reward', avg_score, self.total_time_step)
+				#avg_score = self.evaluate()
+				#self.writer.add_scalar('Evaluate/Episode Reward', avg_score, self.total_time_step)
 
 	def evaluate(self):
 		print("==============================================")
